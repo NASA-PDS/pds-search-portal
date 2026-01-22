@@ -36,3 +36,17 @@ export interface QueryResult {
   query: string;
   status: number;
 }
+interface PdsCmrParams extends Params{
+  page_types: {
+    topic: string
+  }[]
+  investigations: {
+    topic: string
+  }[]
+  instruments: {
+    topic: string
+  }[]
+  targets: {
+    topic: string
+  }[]
+}

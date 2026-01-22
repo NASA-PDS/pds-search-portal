@@ -6,7 +6,22 @@ import { getConfig } from './getConfig'
 import { stringifyCollectionsQuery } from './stringifyCollectionsQuery'
 import collectionDefaultParams from '../constants/collectionDefaultParams'
 import facetDefaultParams from '../constants/facetDefaultParams'
-import { Params, QueryResult } from '../../types/global'
+import {
+  Params,
+  PdsCmrParams,
+  QueryResult
+} from '../../types/global'
+import {
+  formatSearchResults,
+  convertPdsDataToAppData,
+  convertPdsFacetDataToAppFacetData,
+  formatIdentifierNameResults,
+  organizeIdsByRefName,
+  mapFilterIdsToName,
+  mapPageType,
+  formatFilterQueries
+} from './pds/searchUtils'
+import { IdentifierNameDoc } from '../../types/solrSearchResponse'
 
 const validParameters = [
   'bounding_box',
@@ -108,6 +123,97 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
 
   const [facets, collections] = await Promise.all([fetch(facetsUrl), fetch(collectionsUrl)])
 
+  const formattedQuery = formatFilterQueries(params as PdsCmrParams)
+
+  // Keyword logic
+  let pdsUrl = 'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q='
+  if (cmrParams.keyword) {
+    pdsUrl += cmrParams.keyword.replace('*', '')
+  }
+
+  pdsUrl += formattedQuery
+
+  console.log('pdsUrl', pdsUrl)
+
+  const pdsRes = await fetch(pdsUrl)
+  if (pdsRes.status >= 400) {
+    throw new Error('Bad response from server')
+  }
+
+  const pdsResponse = await pdsRes.json()
+  const formattedData = formatSearchResults(pdsResponse)
+
+  console.log('pdsResponse', pdsResponse)
+  console.log('formattedData', formattedData)
+
+  const pdsData = convertPdsDataToAppData(formattedData)
+
+  // Facet logic
+  const pdsUrls = [
+    'https://pds.nasa.gov/services/search/search?q=&qt=keyword&rows=0&facet=on&facet.field=investigation_ref&facet.field=instrument_ref&facet.field=target_ref&facet.field=page_type&wt=json&facet.limit=-1',
+    'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Investigation&fl=title,identifier&rows=10000',
+    'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Instrument&fl=title,identifier&rows=10000',
+    'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Target&fl=title,identifier&rows=10000'
+  ]
+
+  const [
+    pdsIdsAndCounts,
+    pdsInvestigationNames,
+    pdsInstrumentNames,
+    pdsTargetNames] = await Promise.all([
+    fetch(pdsUrls[0]),
+    fetch(pdsUrls[1]),
+    fetch(pdsUrls[2]),
+    fetch(pdsUrls[3])
+  ])
+
+  const pdsIdsAndCountsResponse = await pdsIdsAndCounts.clone().json()
+  const pdsInvestigationNamesResponse = await pdsInvestigationNames.clone().json()
+  const pdsInstrumentNamesResponse = await pdsInstrumentNames.clone().json()
+  const pdsTargetNamesResponse = await pdsTargetNames.clone().json()
+
+  console.log('pdsIdsAndCountsResponse', pdsIdsAndCountsResponse)
+  console.log('pdsInvestigationNamesResponse', pdsInvestigationNamesResponse)
+  console.log('pdsInstrumentNamesResponse', pdsInstrumentNamesResponse)
+  console.log('pdsTargetNamesResponse', pdsTargetNamesResponse)
+
+  const formattedIdsAndCountsData = formatIdentifierNameResults(pdsIdsAndCountsResponse)
+  const formattedInvestigationData = formatIdentifierNameResults(pdsInvestigationNamesResponse)
+  const formattedInstrumentsData = formatIdentifierNameResults(pdsInstrumentNamesResponse)
+  const formattedTargetsData = formatIdentifierNameResults(pdsTargetNamesResponse)
+
+  const pageTypeFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'page_type'
+  )
+  const investigationFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'investigation_ref'
+  )
+  const instrumentFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'instrument_ref'
+  )
+  const targetFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'target_ref'
+  )
+
+  const investigationNames: IdentifierNameDoc[] = formattedInvestigationData.response.docs
+  const instrumentNames: IdentifierNameDoc[] = formattedInstrumentsData.response.docs
+  const targetNames: IdentifierNameDoc[] = formattedTargetsData.response.docs
+
+  const investigationFilterOptions = mapFilterIdsToName(
+    investigationFilterIds,
+    investigationNames
+  )
+  const instrumentFilterOptions = mapFilterIdsToName(
+    instrumentFilterIds,
+    instrumentNames
+  )
+  const targetFilterOptions = mapFilterIdsToName(targetFilterIds, targetNames)
+  const pageTypeFilterOptions = mapPageType(pageTypeFilterIds)
+
   // Provide status / message / headers from the facets query unless collections failed
   const response = !collections.ok ? collections : facets
 
@@ -117,10 +223,28 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
     headers: response.headers,
     query: collectionsQuery
   }
+
+  const pdsFacetData = convertPdsFacetDataToAppFacetData(
+    pageTypeFilterOptions,
+    investigationFilterOptions,
+    instrumentFilterOptions,
+    targetFilterOptions,
+    params as PdsCmrParams
+  )
+
+  const pdsPromisedFacetData = Promise.resolve<any>(pdsFacetData)
+  const pdsPromisedData = Promise.resolve<any>(pdsData)
+
   try {
     // Clone required because fetch only allowed reading body once
     result.data = await collections.clone().json()
     result.facetData = await facets.clone().json()
+
+    console.log('result.data', result.data)
+    console.log('result.facetData', result.facetData)
+
+    result.data = await pdsPromisedData
+    result.facetData = await pdsPromisedFacetData
   } catch (e) {
     console.warn('Unable to parse JSON', e)
   }

@@ -73,12 +73,60 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
 
   return (
     <SearchFilterSectionList
-      defaultActiveKey={['1']}
+      defaultActiveKey={['1', '2', '3', '4']}
       setSidebarOpened={setSidebarOpened}
     >
       {
+        getFacets('PageTypes').length > 0 && (
+          <SearchFilterSection title="Page Types" eventKey="1" setSidebarOpened={setSidebarOpened}>
+            <FacetChecklist
+              name="pageTypes"
+              param={namesToParams.PageTypes}
+              facets={getFacets('PageTypes')}
+              onChange={onChange}
+            />
+          </SearchFilterSection>
+        )
+      }
+      {
+        getFacets('Investigations').length > 0 && (
+          <SearchFilterSection title="Investigations" eventKey="2" setSidebarOpened={setSidebarOpened}>
+            <FacetChecklist
+              name="investigations"
+              param={namesToParams.Investigations}
+              facets={getFacets('Investigations')}
+              onChange={onChange}
+            />
+          </SearchFilterSection>
+        )
+      }
+      {
+        getFacets('Instruments').length > 0 && (
+          <SearchFilterSection title="Instruments" eventKey="3" setSidebarOpened={setSidebarOpened}>
+            <FacetChecklist
+              name="instruments"
+              param={namesToParams.Instruments}
+              facets={getFacets('Instruments')}
+              onChange={onChange}
+            />
+          </SearchFilterSection>
+        )
+      }
+      {
+        getFacets('Targets').length > 0 && (
+          <SearchFilterSection title="Targets" eventKey="4" setSidebarOpened={setSidebarOpened}>
+            <FacetChecklist
+              name="targets"
+              param={namesToParams.Instruments}
+              facets={getFacets('Targets')}
+              onChange={onChange}
+            />
+          </SearchFilterSection>
+        )
+      }
+      {
         getFacets('Keywords').length > 0 && (
-          <SearchFilterSection title="Topics" eventKey="1" setSidebarOpened={setSidebarOpened}>
+          <SearchFilterSection title="Topics" eventKey="5" setSidebarOpened={setSidebarOpened}>
             <FacetChecklist
               name="topics"
               param={namesToParams.Keywords}
@@ -90,7 +138,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
       }
       {
         getFacets('Platforms').length > 0 && (
-          <SearchFilterSection title="Observation Method" eventKey="3" setSidebarOpened={setSidebarOpened}>
+          <SearchFilterSection title="Observation Method" eventKey="6" setSidebarOpened={setSidebarOpened}>
             <FacetChecklist
               name="observation methods"
               facets={getFacets('Platforms')}
@@ -102,7 +150,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
         )
       }
 
-      <SearchFilterSection title="Temporal" eventKey="4" setSidebarOpened={setSidebarOpened}>
+      <SearchFilterSection title="Temporal" eventKey="7" setSidebarOpened={setSidebarOpened}>
         <Accordion alwaysOpen className="hzn-filters__accordion_sub" defaultActiveKey={['4.0', '4.1']}>
           <Accordion.Item eventKey="4.0">
             <Accordion.Header>Coverage Date Range</Accordion.Header>
@@ -139,10 +187,10 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
           { /* Accordion.Item "Resolution" (No equivalent CMR facet. Requested in CMR-9871) */ }
         </Accordion>
       </SearchFilterSection>
-      <SearchFilterSection title="Spatial" eventKey="5" setSidebarOpened={setSidebarOpened}>
+      <SearchFilterSection title="Spatial" eventKey="8" setSidebarOpened={setSidebarOpened}>
         <Accordion alwaysOpen className="hzn-filters__accordion_sub" defaultActiveKey={['5.0', '5.1', '5.2']}>
           { /* Accordion.Item "Geographic Region" (No equivalent CMR facet. Requested in CMR-9872) */ }
-          <Accordion.Item eventKey="5.1">
+          <Accordion.Item eventKey="8.1">
             <Accordion.Header>Coverage</Accordion.Header>
             <Accordion.Body>
               <Form.Group controlId="bounding_box">
@@ -161,7 +209,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
           </Accordion.Item>
           {
             getFacets('Horizontal Data Resolution').length > 0 && (
-              <Accordion.Item eventKey="5.2">
+              <Accordion.Item eventKey="8.2">
                 <Accordion.Header>Resolution</Accordion.Header>
                 <Accordion.Body>
                   <FacetChecklist
@@ -178,7 +226,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
       </SearchFilterSection>
       {
         getFacets('Data Format').length > 0 && (
-          <SearchFilterSection title="Data Format" eventKey="6" setSidebarOpened={setSidebarOpened}>
+          <SearchFilterSection title="Data Format" eventKey="9" setSidebarOpened={setSidebarOpened}>
             <FacetChecklist
               name="data formats"
               facets={getFacets('Data Format')}
@@ -190,7 +238,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
       }
       {
         getFacets('Processing Levels').length > 0 && (
-          <SearchFilterSection title="Data Processing Level" eventKey="7" setSidebarOpened={setSidebarOpened}>
+          <SearchFilterSection title="Data Processing Level" eventKey="10" setSidebarOpened={setSidebarOpened}>
             <FacetChecklist
               name="processing levels"
               facets={getFacets('Processing Levels')}
@@ -202,7 +250,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
       }
       {
         getFacets('Organizations').length > 0 && (
-          <SearchFilterSection title="Center" eventKey="8" setSidebarOpened={setSidebarOpened}>
+          <SearchFilterSection title="Center" eventKey="11" setSidebarOpened={setSidebarOpened}>
             <FacetChecklist
               name="centers"
               facets={getFacets('Organizations')}
@@ -214,7 +262,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
       }
       {
         getFacets('Latency').length > 0 && (
-          <SearchFilterSection title="Latency" eventKey="9" setSidebarOpened={setSidebarOpened}>
+          <SearchFilterSection title="Latency" eventKey="12" setSidebarOpened={setSidebarOpened}>
             <FacetChecklist
               name="Latency"
               facets={getFacets('Latency')}
