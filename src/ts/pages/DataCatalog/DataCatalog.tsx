@@ -159,11 +159,16 @@ const DataCatalog: React.FC = () => {
 
         const facets = facetData?.feed?.facets
 
+        let count = 0
+        if (response.headers['cmr-hits']) {
+          count = parseInt(response.headers['cmr-hits'], 10)
+        }
+
         setData({
           facets,
           collections: {
             items,
-            count: parseInt((response.headers as Headers).get('cmr-hits') || '0', 10)
+            count
           }
         })
 
@@ -291,7 +296,6 @@ const DataCatalog: React.FC = () => {
         {
           ({
             values,
-            handleChange,
             handleBlur,
             handleSubmit: formHandleSubmit,
             setFieldValue
@@ -367,9 +371,6 @@ const DataCatalog: React.FC = () => {
                         </header>
                         <SearchFilters
                           facets={facets}
-                          filterValues={values}
-                          handleChange={handleChange}
-                          handleBlur={handleBlur}
                           setQueryString={setQueryString}
                           setSidebarOpened={setSidebarOpened}
                         />

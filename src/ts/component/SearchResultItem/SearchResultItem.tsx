@@ -1,13 +1,7 @@
 import React from 'react'
 import Col from 'react-bootstrap/Col'
 import Row from 'react-bootstrap/Row'
-import {
-  get,
-  template,
-  uniq
-} from 'lodash-es'
-import { getConfig } from '../../utils/getConfig'
-import TextIcon from '../TextIcon/TextIcon'
+import { get, uniq } from 'lodash-es'
 
 interface GeoPoint {
   Latitude: number;
@@ -46,6 +40,8 @@ interface Umm {
   ArchiveAndDistributionInformation?: {
     FileDistributionInformation?: FileDistributionInfo[];
   };
+  Link: string;
+  PageType: string;
   Projects?: Array<{ ShortName: string }>;
   RelatedUrls?: Array<{ Type: string, URL: string }>;
   DataDates?: Array<{ Type: string, Date: string }>;
@@ -67,6 +63,8 @@ export interface Metadata {
     ShortName: string;
     Version: string;
     DOI?: DoiLink;
+    Link: string;
+    PageType: string;
     Projects?: Array<{ ShortName: string }>;
     ArchiveAndDistributionInformation?: {
       FileDistributionInformation: Array<{
@@ -221,6 +219,8 @@ function ummToSummary({ meta, umm }: { meta: Meta, umm: Umm }) {
     doi: umm.DOI ? doiLink(umm.DOI) : undefined,
     daac: daac && daac.ShortName.split('/').pop(),
     fileFormats,
+    link: umm.Link,
+    pageType: umm.PageType,
     projects,
     published,
     providerId: meta['provider-id']
@@ -231,27 +231,14 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
   const {
     conceptId,
     title,
-    shortname,
-    version,
     summary,
-    temporal,
-    spatial,
-    daac,
-    configuredLandingPage,
     doi,
-    fileFormats,
-    projects,
-    published,
-    providerId
+    link,
+    pageType,
+    published
   } = ummToSummary(metadata)
 
   const collection = metadata
-
-  const collectionPath = getConfig('collectionPath') || '/collections/<%= id %>'
-  const cmrHost = getConfig('cmrHost')
-  const providersWithLandingPages = getConfig('providersWithLandingPages')
-
-  const compiledTemplate = template(collectionPath as string)
 
   // Create a new object with encoded umm values
   const encodedUmm: { [key: string]: string } = {}
@@ -260,44 +247,11 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
     encodedUmm[key] = encodeURIComponent(String(value))
   })
 
-  const fullPath = compiledTemplate({
-    id: collection.meta['concept-id'],
-    ProviderId: providerId,
-    ...encodedUmm
-  })
-
-  const shortnameVersion = shortname && version ? `${shortname} v${version}` : null
-
-  const titleLink = (): string => {
-    // Render a clickable title link if:
-    // 1. There's no list of providers with landing pages (all providers get links), or
-    // 2. The current provider is in the list of providers that should have dataset landing pages
-    if (!providersWithLandingPages || (providersWithLandingPages as string).includes(providerId)) {
-      return fullPath.toLowerCase().replace(/_/g, '-')
-    }
-
-    // If a DOI is available and the provider is not in providersWithLandingPages,
-    // render the title as a link to the DOI landing page
-    if (doi) {
-      return doi.link
-    }
-
-    // If there's a configured landing page in the CMR metadata
-    if (configuredLandingPage) {
-      return configuredLandingPage
-    }
-
-    // Otherwise fall back to using the CMR landing pages endpoint
-    const defaultLandingPage = `${cmrHost}/concepts/${conceptId}`
-
-    return (defaultLandingPage as string)
-  }
-
   return (
     <div key={conceptId} className="hzn-search-result pb-2">
       <Row>
         <Col className="hzn-search-result__meta_metadata d-flex align-items-center">
-          <span className="me-4">Data</span>
+          <span className="me-4">{pageType}</span>
           <span className="me-2">
             Published
           </span>
@@ -306,9 +260,9 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
         </Col>
       </Row>
       <Row>
-        <Col lg={9}>
+        <Col lg={12}>
           <h1>
-            <a href={titleLink()}>{title}</a>
+            <a href={link}>{title}</a>
           </h1>
           <p
             className="hzn-search-result__abstract mb-3"
@@ -316,45 +270,13 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
           >
             {summary}
           </p>
-          {
-            temporal && (
-              <p
-                className="hzn-search-result__temporal mb-2"
-                data-testid="collection-search-result__temporal"
-              >
-                <strong>Temporal Coverage: </strong>
-                {' '}
-                {temporal}
-              </p>
-            )
-          }
-          {
-            spatial && (
-              <p
-                className="hzn-search-result__spatial mb-2"
-                data-testid="collection-search-result__spatial"
-              >
-                <strong>Spatial Coverage: </strong>
-                {' '}
-                {spatial}
-              </p>
-            )
-          }
           <div className="hzn-search-result__shortname-version-doi d-flex mb-2 mt-1">
-            {shortnameVersion && (shortnameVersion)}
             {
               doi && (
-                <a className="hzn-search-result__doi-link" href={doi.link}>{doi.text}</a>
+                <a className="hzn-search-result__doi-link" href={link}>{decodeURIComponent(link)}</a>
               )
             }
           </div>
-        </Col>
-        <Col lg={3}>
-          <Row>
-            <TextIcon className="col-md-auto col-lg-12 mb-2" iconName="doc" title="File Format" field={fileFormats} />
-            <TextIcon className="col-md-auto col-lg-12 mb-2" iconName="globe" title="Mission / Project" field={projects} />
-            <TextIcon className="col-md-auto col-lg-12 mb-2" iconName="location" title="Archive Center" field={daac} />
-          </Row>
         </Col>
       </Row>
     </div>

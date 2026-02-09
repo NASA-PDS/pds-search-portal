@@ -22,6 +22,8 @@ export interface Params {
   temporal?: string[] | string
 }
 
+type QueryHeaders = Record<string, string> & { 'cmr-hits'?: string }
+
 export interface QueryResult {
   data?: {
     items?: []
@@ -31,7 +33,7 @@ export interface QueryResult {
       facets?: []
     }
   };
-  headers: Headers;
+  headers: QueryHeaders;
   message: string;
   query: string;
   status: number;

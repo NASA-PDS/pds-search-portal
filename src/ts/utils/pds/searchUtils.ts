@@ -313,10 +313,193 @@ export const mapPageType = (ids: string[], searchResultFacets?: (number | string
   return filtersMap
 }
 
+const getDocType = (doc: SearchResultDoc) => {
+  let docType = ''
+  if (doc.product_class) {
+    if (doc.product_class[0].toLowerCase() === 'product_data_set_pds3') {
+      docType = 'data set'
+    }
+
+    if (doc.product_class[0].toLowerCase() === 'product_bundle') {
+      docType = 'data bundle'
+    }
+
+    if (doc.product_class[0].toLowerCase() === 'product_collection') {
+      if (doc.collection_type) {
+        if (doc.collection_type[0] !== 'document') {
+          docType = 'data collection'
+        }
+      } else {
+        docType = 'data collection'
+      }
+    }
+
+    if (doc.product_class[0].toLowerCase() === 'product_service') {
+      docType = 'tool'
+    }
+
+    if (
+      doc.product_class[0].toLowerCase() === 'product_document'
+            || (doc.collection_type
+                && doc.collection_type[0].toLowerCase() === 'document')
+    ) {
+      docType = 'resource'
+    }
+
+    if (doc.product_class[0].toLowerCase() === 'product_context') {
+      if (
+        doc.data_class
+                && doc.data_class[0].toLowerCase() === 'investigation'
+      ) {
+        docType = 'investigation portal'
+      }
+
+      if (
+        doc.data_class
+                && doc.data_class[0].toLowerCase() === 'instrument'
+      ) {
+        docType = 'instrument portal'
+      }
+
+      if (
+        doc.data_class
+                && doc.data_class[0].toLowerCase() === 'instrument_host'
+      ) {
+        docType = 'instrument host portal'
+      }
+
+      if (doc.data_class && doc.data_class[0].toLowerCase() === 'telescope') {
+        docType = 'telescope portal'
+      }
+
+      if (doc.data_class && doc.data_class[0].toLowerCase() === 'target') {
+        docType = 'target portal'
+      }
+
+      if (doc.data_class && doc.data_class[0].toLowerCase() === 'facility') {
+        docType = 'facility portal'
+      }
+    }
+  }
+
+  return docType
+}
+
+const convertDataDates = (timeStamp: string[], modificationDate: string[]) => {
+  type dateLog = {
+    Date: string; // ISO 8601 format string
+    Type: 'CREATE' | 'UPDATE' | 'DELETE';
+  };
+
+  const dates: dateLog[] = []
+  if (modificationDate) {
+    const date: dateLog = {
+      Date: modificationDate[0],
+      Type: 'CREATE'
+    }
+
+    dates.push(date)
+  } else {
+    const date: dateLog = {
+      Date: timeStamp[0],
+      Type: 'CREATE'
+    }
+
+    dates.push(date)
+  }
+
+  return dates
+}
+
+const pdsEndpoint = 'http://pds.nasa.gov'
+
+const getDefaultLink = (doc: SearchResultDoc) => {
+  let link = pdsEndpoint
+
+  if (doc.resLocation) {
+    link += doc.resLocation[0]
+  }
+
+  return link
+}
+
+const getLinkToInvestigationDetailPage = (doc: SearchResultDoc) => {
+  const link = getDefaultLink(doc)
+
+  return link
+}
+
+const getLinkToInstrumentDetailPage = (doc: SearchResultDoc) => {
+  const link = getDefaultLink(doc)
+
+  return link
+}
+
+const getLinkToTargetDetailPage = (doc: SearchResultDoc) => {
+  const link = getDefaultLink(doc)
+
+  return link
+}
+
+const getLinkToToolDetailPage = (doc: SearchResultDoc) => {
+  let link = getDefaultLink(doc)
+
+  if (doc.service_url && doc.service_url.length > 0) {
+    [link] = doc.service_url
+  }
+
+  return link
+}
+
+const generateSearchResultLinkPath = (pageType: string, doc: SearchResultDoc) => {
+  let link = ''
+
+  switch (pageType) {
+    case 'data set':
+      link = getDefaultLink(doc)
+      break
+    case 'data bundle':
+      link = getDefaultLink(doc)
+      break
+    case 'data collection':
+      link = getDefaultLink(doc)
+      break
+    case 'tool':
+      link = getLinkToToolDetailPage(doc)
+      break
+    case 'resource':
+      link = getDefaultLink(doc)
+      break
+    case 'investigation portal':
+      link = getLinkToInvestigationDetailPage(doc)
+      break
+    case 'instrument portal':
+      link = getLinkToInstrumentDetailPage(doc)
+      break
+    case 'instrument host portal':
+      link = getLinkToInstrumentDetailPage(doc)
+      break
+    case 'telescope portal':
+      link = getDefaultLink(doc)
+      break
+    case 'target portal':
+      link = getLinkToTargetDetailPage(doc)
+      break
+    case 'facility portal':
+      link = getDefaultLink(doc)
+      break
+    default:
+      link = ''
+  }
+
+  return link
+}
+
 export const convertPdsDataToAppData = (pdsData: SolrSearchResponse) => {
   const items: any[] = []
 
-  pdsData.response.docs.forEach((doc) => {
+  /*
+  PdsData.response.docs.forEach((doc) => {
     const item = {
       meta: {
         'concept-id': 'C2808090209-ORNL_CLOUD',
@@ -480,8 +663,176 @@ export const convertPdsDataToAppData = (pdsData: SolrSearchResponse) => {
 
     items.push(item)
   })
+  */
+
+  pdsData.response.docs.forEach((doc) => {
+    let dataDates
+    if (doc.timestamp && doc.modification_date) {
+      dataDates = convertDataDates(doc.timestamp, doc.modification_date)
+    }
+
+    const pageType = getDocType(doc)
+    const resultLink = generateSearchResultLinkPath(pageType, doc)
+
+    const item = {
+      meta: {
+        'concept-id': '',
+        'concept-type': '',
+        deleted: false,
+        format: '',
+        'has-combine': false,
+        'has-formats': false,
+        'has-spatial-subsetting': false,
+        'has-temporal-subsetting': false,
+        'has-transforms': false,
+        'has-variables': false,
+        'native-id': '',
+        'provider-id': '',
+        'revision-date': '',
+        'revision-id': 1,
+        's3-links': [],
+        'user-id': ''
+      },
+      umm: {
+        Abstract: doc.description,
+        AncillaryKeywords: ['ATMOSPHERIC PRESSURE', 'WIND DIRECTION', 'WIND SPEED', 'RELATIVE HUMIDITY', 'TEMPERATURE', 'SURFACE METEOROLOGY', 'PRECIPITATION', 'DEW POINT', 'CLOUD COVER', 'VISIBILITY'],
+        ArchiveAndDistributionInformation: {
+          FileDistributionInformation: [
+            {
+              Format: 'ASCII',
+              TotalCollectionFileSize: 6.74,
+              TotalCollectionFileSizeUnit: 'MB'
+            }
+          ]
+        },
+        CollectionCitations: [
+          {
+            OtherCitationDetails: 'Atkinson, G.B., and B. Funk. 1998. BOREAS/AES MARS-II 15-minute Surface Meteorological Data: 1994. ORNL DAAC, Oak Ridge, Tennessee, USA. http://dx.doi.org/10.3334/ORNLDAAC/407'
+          }
+        ],
+        CollectionProgress: 'COMPLETE',
+        DOI: {
+          DOI: '10.3334/ORNLDAAC/407',
+          Authority: 'https://doi.org'
+        },
+        DataCenters: [
+          {
+            ContactInformation: {
+              Addresses: [
+                {
+                  City: 'Oak Ridge',
+                  Country: 'USA',
+                  PostalCode: '37831-6407',
+                  StateProvince: 'Tennessee',
+                  StreetAddresses: ['ORNL DAAC User Services Office, P.O. Box 2008, MS 6407, Oak Ridge National Laboratory']
+                }
+              ]
+            },
+            LongName: 'THE OAK RIDGE NATIONAL LABORATORY (ORNL) DISTRIBUTED ACTIVE ARCHIVE CENTER (DAAC)',
+            Roles: 'ARCHIVER',
+            ShortName: 'ORNL_DAAC'
+          }
+        ],
+        DataDates: dataDates,
+        DirectDistributionInformation: {
+          Region: 'us-west-2',
+          S3BucketAndObjectPrefixNames: ['s3://ornl-cumulus-prod-protected/boreas/STAFF/marsii94/data', 's3://ornl-cumulus-prod-public/boreas/STAFF/marsii94'],
+          S3CredentialsAPIDocumentationURL: 'https://data.ornldaac.earthdata.nasa.gov/s3credentialsREADME',
+          S3CredentialsAPIEndpoint: 'https://data.ornldaac.earthdata.nasa.gov/s3credentials'
+        },
+        EntryTitle: doc.title,
+        MetadataSpecification: {
+          URL: 'https://cdn.earthdata.nasa.gov/umm/collection/v1.18.4',
+          Name: 'UMM-C',
+          Version: '1.18.4'
+        },
+        Link: resultLink,
+        PageType: pageType,
+        Platforms: [
+          {
+            Instruments: [
+              {
+                LongName: 'CEILOMETERS',
+                ShortName: 'CEILOMETERS'
+              }
+            ],
+            LongName: 'METEOROLOGICAL STATIONS',
+            ShortName: 'METEOROLOGICAL STATIONS',
+            Type: 'Permanent Land Sites'
+          }
+        ],
+        ProcessingLevel: {
+          Id: '3',
+          ProcessingLevelDescription: 'Variables mapped on uniform space-time grid scales with completeness and consistency'
+        },
+        Projects: [
+          {
+            LongName: 'Boreal Ecosystem-Atmosphere Study',
+            ShortName: 'BOREAS'
+          }
+        ],
+        RelatedUrls: [
+          {
+            Description: 'Earthdata Search allows users to search, discover, visualize, refine, and access NASA Earth Observation data.',
+            Subtype: 'Earthdata Search',
+            Type: 'GET DATA',
+            URL: 'https://search.earthdata.nasa.gov/search?q=marsii94_407&ac=true',
+            URLContentType: 'DistributionURL'
+          }
+        ],
+        ScienceKeywords: [
+          {
+            Category: 'EARTH SCIENCE',
+            Term: 'CLOUDS',
+            Topic: 'ATMOSPHERE',
+            VariableLevel1: 'CLOUD PROPERTIES',
+            VariableLevel2: 'CLOUD VERTICAL DISTRIBUTION'
+          }
+        ],
+        ShortName: 'marsii94_407',
+        SpatialExtent: {
+          GranuleSpatialRepresentation: 'CARTESIAN',
+          HorizontalSpatialDomain: {
+            Geometry: {
+              BoundingRectangles: {
+                EastBoundingCoordinate: -97.55,
+                NorthBoundingCoordinate: 59.56,
+                SouthBoundingCoordinate: 51.08,
+                WestBoundingCoordinate: -108.43
+              }
+            }
+          },
+          SpatialCoverageType: 'HORIZONTAL'
+        },
+        StandardProduct: false,
+        TemporalExtents: [
+          {
+            EndsAtPresentFlag: false,
+            RangeDateTimes: [
+              {
+                BeginningDateTime: '1994-05-24T00:00:00.000Z',
+                EndingDateTime: '1994-09-20T23:59:59.999Z'
+              }
+            ]
+          }
+        ],
+        UseConstraints: {
+          LicenseURL: {
+            Description: 'License URL for data use policy',
+            Linkage: 'https://science.nasa.gov/earth-science/earth-science-data/data-information-policy',
+            MimeType: 'text/html',
+            Name: 'Data Use Policy'
+          }
+        },
+        Version: '1'
+      }
+    }
+
+    items.push(item)
+  })
 
   const data: any = {
+    'cmr-hits': pdsData.response.numFound,
     items
   }
 

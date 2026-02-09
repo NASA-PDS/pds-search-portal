@@ -1,6 +1,4 @@
 import React from 'react'
-import { Accordion } from 'react-bootstrap'
-import Form from 'react-bootstrap/Form'
 import SearchFilterSection from '../SearchFilterSection/SearchFilterSection'
 import SearchFilterSectionList from '../SearchFilterSectionList/SearchFilterSectionList'
 import FacetChecklist from '../FacetChecklist/FacetChecklist'
@@ -11,15 +9,6 @@ import './SearchFilters.scss'
 
 interface SearchFiltersProps {
   facets: object;
-  filterValues: {
-    bounding_box?: string
-    processing_level_id_h?: string[];
-    science_keywords_h?: string[];
-    temporal?: string[] | string
-    page_num?: number
-  };
-  handleChange: (_event: React.ChangeEvent<HTMLInputElement>) => void;
-  handleBlur: (_event: React.FocusEvent<HTMLInputElement>) => void;
   setQueryString: (_query: string) => void;
   setSidebarOpened: (_isOpened: boolean) => void;
 }
@@ -51,9 +40,6 @@ const namesToParams: { [key: string]: string } = {
 
 const SearchFilters: React.FC<SearchFiltersProps> = ({
   facets,
-  filterValues,
-  handleChange,
-  handleBlur,
   setQueryString,
   setSidebarOpened
 }) => {
@@ -150,128 +136,6 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
         )
       }
 
-      <SearchFilterSection title="Temporal" eventKey="7" setSidebarOpened={setSidebarOpened}>
-        <Accordion alwaysOpen className="hzn-filters__accordion_sub" defaultActiveKey={['4.0', '4.1']}>
-          <Accordion.Item eventKey="4.0">
-            <Accordion.Header>Coverage Date Range</Accordion.Header>
-            <Accordion.Body>
-              <Form.Group controlId="temporal[0]">
-                <Form.Label>Start Date</Form.Label>
-                <Form.Control
-                  type="date"
-                  size="sm"
-                  name="temporal[0]"
-                  placeholder="MM/DD/YYYY"
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  value={(filterValues.temporal && filterValues.temporal[0]) || ''}
-                  aria-label="Start Date"
-                />
-              </Form.Group>
-
-              <Form.Group controlId="temporal[1]">
-                <Form.Label>End Date</Form.Label>
-                <Form.Control
-                  type="date"
-                  size="sm"
-                  name="temporal[1]"
-                  placeholder="MM/DD/YYYY"
-                  onChange={handleChange}
-                  onBlur={handleBlur}
-                  value={(filterValues.temporal && filterValues.temporal[1]) || ''}
-                  aria-label="End Date"
-                />
-              </Form.Group>
-            </Accordion.Body>
-          </Accordion.Item>
-          { /* Accordion.Item "Resolution" (No equivalent CMR facet. Requested in CMR-9871) */ }
-        </Accordion>
-      </SearchFilterSection>
-      <SearchFilterSection title="Spatial" eventKey="8" setSidebarOpened={setSidebarOpened}>
-        <Accordion alwaysOpen className="hzn-filters__accordion_sub" defaultActiveKey={['5.0', '5.1', '5.2']}>
-          { /* Accordion.Item "Geographic Region" (No equivalent CMR facet. Requested in CMR-9872) */ }
-          <Accordion.Item eventKey="8.1">
-            <Accordion.Header>Coverage</Accordion.Header>
-            <Accordion.Body>
-              <Form.Group controlId="bounding_box">
-                <Form.Control
-                  type="text"
-                  size="sm"
-                  name="bounding_box"
-                  placeholder="-180,-90,180,90 (W,S,E,N)"
-                  onChange={handleChange}
-                  aria-label="Bounding Box"
-                  onBlur={handleBlur}
-                  value={filterValues.bounding_box || ''}
-                />
-              </Form.Group>
-            </Accordion.Body>
-          </Accordion.Item>
-          {
-            getFacets('Horizontal Data Resolution').length > 0 && (
-              <Accordion.Item eventKey="8.2">
-                <Accordion.Header>Resolution</Accordion.Header>
-                <Accordion.Body>
-                  <FacetChecklist
-                    name="spatial resolutions"
-                    facets={getFacets('Horizontal Data Resolution')}
-                    param={namesToParams['Horizontal Data Resolution']}
-                    onChange={onChange}
-                  />
-                </Accordion.Body>
-              </Accordion.Item>
-            )
-          }
-        </Accordion>
-      </SearchFilterSection>
-      {
-        getFacets('Data Format').length > 0 && (
-          <SearchFilterSection title="Data Format" eventKey="9" setSidebarOpened={setSidebarOpened}>
-            <FacetChecklist
-              name="data formats"
-              facets={getFacets('Data Format')}
-              param={namesToParams['Data Format']}
-              onChange={onChange}
-            />
-          </SearchFilterSection>
-        )
-      }
-      {
-        getFacets('Processing Levels').length > 0 && (
-          <SearchFilterSection title="Data Processing Level" eventKey="10" setSidebarOpened={setSidebarOpened}>
-            <FacetChecklist
-              name="processing levels"
-              facets={getFacets('Processing Levels')}
-              param={namesToParams['Processing Levels']}
-              onChange={onChange}
-            />
-          </SearchFilterSection>
-        )
-      }
-      {
-        getFacets('Organizations').length > 0 && (
-          <SearchFilterSection title="Center" eventKey="11" setSidebarOpened={setSidebarOpened}>
-            <FacetChecklist
-              name="centers"
-              facets={getFacets('Organizations')}
-              param={namesToParams.Organizations}
-              onChange={onChange}
-            />
-          </SearchFilterSection>
-        )
-      }
-      {
-        getFacets('Latency').length > 0 && (
-          <SearchFilterSection title="Latency" eventKey="12" setSidebarOpened={setSidebarOpened}>
-            <FacetChecklist
-              name="Latency"
-              facets={getFacets('Latency')}
-              param={namesToParams.Latency}
-              onChange={onChange}
-            />
-          </SearchFilterSection>
-        )
-      }
       { /* Accordion.Item "Center" (No equivalent CMR field/facet. Requested CMR-9874) */ }
       { /* Accordion.Item "Date" (No equivalent. Probably won't do.) */ }
     </SearchFilterSectionList>

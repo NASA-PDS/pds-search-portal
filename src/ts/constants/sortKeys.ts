@@ -12,17 +12,5 @@ export const collectionSortKeys = [
   {
     key: '-score',
     value: 'Relevance'
-  },
-  {
-    key: '-usage_score',
-    value: 'Usage'
-  },
-  {
-    key: 'start_date',
-    value: 'Start Date'
-  },
-  {
-    key: '-ongoing',
-    value: 'End Date'
   }
 ]

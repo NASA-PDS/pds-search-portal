@@ -2,10 +2,6 @@ import fetch from 'cross-fetch'
 
 import { pick } from 'lodash-es'
 
-import { getConfig } from './getConfig'
-import { stringifyCollectionsQuery } from './stringifyCollectionsQuery'
-import collectionDefaultParams from '../constants/collectionDefaultParams'
-import facetDefaultParams from '../constants/facetDefaultParams'
 import {
   Params,
   PdsCmrParams,
@@ -39,57 +35,21 @@ const validParameters = [
   'temporal'
 ] as const
 
-type CustomError = Error & { response?: QueryResult };
-
 /**
- * Merges default parameters with provided parameters, handling 'sort_key' specially.
- *
- * This function creates a new object based on the defaults and overrides them with
- * values from the params object. For the 'sort_key' parameter, if it exists in both
- * objects and the default value is an array, it replaces only the first element of
- * the array, preserving any additional default sort keys.
- *
- * @param {object} defaults - The default parameters object.
- * @param {object} params - The provided parameters object to merge with defaults.
- * @returns {object} A new object with merged parameters.
- *
- * @example
- * const defaults = {
- *   page_size: 20,
- *   sort_key: ['-score', '-create-data-date'],
- *   consortium: 'EOSDIS'
- * };
- *
- * const params = {
- *   page_size: 50,
- *   sort_key: 'start_date'
- * };
- *
- * const result = customMergeParams(defaults, params);
- * console.log(result);
- * // Output:
- * // {
- * //   page_size: 50,
- * //   sort_key: ['start_date', '-create-data-date'],
- * //   consortium: 'EOSDIS'
- * // }
+* Calculates Solr pagination parameters.
+ * @param {number} pageNumber - The current page (1-indexed).
+ * @param {number} pageSize - Number of results per page.
+ * @returns {object} An object containing the 'start' and 'rows' for Solr.
  */
-const customMergeParams = (defaults: any, params: any) => {
-  const result = { ...defaults }
+const getSolrPagination = (pageNumber: number, pageSize: number) => {
+  // Defensive check: ensure page is at least 1 and treat as integer
+  const page = Math.max(1, Math.floor(pageNumber))
+  const size = Math.floor(pageSize)
 
-  Object.keys(params).forEach((key) => {
-    if (key === 'sort_key' && Array.isArray(result[key])) {
-      // If sort_key exists in params, replace the first element of the default array
-      if (params[key]) {
-        result[key] = [params[key], ...result[key].slice(1)]
-      }
-    } else {
-      // For all other keys, simply override the default value
-      result[key] = params[key]
-    }
-  })
-
-  return result
+  return {
+    start: (page - 1) * size,
+    rows: size
+  }
 }
 
 /**
@@ -108,20 +68,7 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
 
   const cmrParams = pick(params, validParameters)
 
-  const cmrHost = getConfig('cmrHost')
-  const facetsQuery = stringifyCollectionsQuery({
-    ...facetDefaultParams,
-    ...cmrParams
-  }, false)
-
-  const collectionsQuery = stringifyCollectionsQuery(
-    customMergeParams(collectionDefaultParams, cmrParams),
-    false
-  )
-  const facetsUrl = `${cmrHost}/search/collections.json?${facetsQuery}`
-  const collectionsUrl = `${cmrHost}/search/collections.umm_json?${collectionsQuery}`
-
-  const [facets, collections] = await Promise.all([fetch(facetsUrl), fetch(collectionsUrl)])
+  console.log('cmrParams', cmrParams)
 
   const formattedQuery = formatFilterQueries(params as PdsCmrParams)
 
@@ -132,6 +79,23 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
   }
 
   pdsUrl += formattedQuery
+
+  let pageSize = 10
+  if (cmrParams.page_size) {
+    pageSize = cmrParams.page_size
+  }
+
+  let pageNum = 1
+  if (cmrParams.page_num) {
+    pageNum = cmrParams.page_num
+  }
+
+  const pagination = getSolrPagination(pageNum, pageSize)
+  pdsUrl += `&start=${pagination.start}&rows=${pagination.rows}`
+
+  if (cmrParams.sort_key && cmrParams.sort_key === 'alpha') {
+    pdsUrl += '&sort=title asc'
+  }
 
   console.log('pdsUrl', pdsUrl)
 
@@ -148,9 +112,14 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
 
   const pdsData = convertPdsDataToAppData(formattedData)
 
+  let facetCountsUrl = 'https://pds.nasa.gov/services/search/search?q=&qt=keyword&rows=0&facet=on&facet.field=investigation_ref&facet.field=instrument_ref&facet.field=target_ref&facet.field=page_type&wt=json&facet.limit=-1'
+  if (cmrParams.keyword) {
+    facetCountsUrl = facetCountsUrl.replace('q=', `q=${cmrParams.keyword.replace('*', '')}`)
+  }
+
   // Facet logic
   const pdsUrls = [
-    'https://pds.nasa.gov/services/search/search?q=&qt=keyword&rows=0&facet=on&facet.field=investigation_ref&facet.field=instrument_ref&facet.field=target_ref&facet.field=page_type&wt=json&facet.limit=-1',
+    facetCountsUrl,
     'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Investigation&fl=title,identifier&rows=10000',
     'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Instrument&fl=title,identifier&rows=10000',
     'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Target&fl=title,identifier&rows=10000'
@@ -215,13 +184,14 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
   const pageTypeFilterOptions = mapPageType(pageTypeFilterIds)
 
   // Provide status / message / headers from the facets query unless collections failed
-  const response = !collections.ok ? collections : facets
 
   const result: QueryResult = {
-    status: response.status,
-    message: response.statusText,
-    headers: response.headers,
-    query: collectionsQuery
+    status: 200,
+    message: '',
+    headers: {
+      'cmr-hits': pdsData['cmr-hits'] // This is expected a function. Either change the top to not treat as get function or make this have a get by parameter function
+    },
+    query: 'page_num=1&page_size=10&consortium=EOSDIS&sort_key[]=-score&sort_key[]=-create-data-date'
   }
 
   const pdsFacetData = convertPdsFacetDataToAppFacetData(
@@ -236,23 +206,10 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
   const pdsPromisedData = Promise.resolve<any>(pdsData)
 
   try {
-    // Clone required because fetch only allowed reading body once
-    result.data = await collections.clone().json()
-    result.facetData = await facets.clone().json()
-
-    console.log('result.data', result.data)
-    console.log('result.facetData', result.facetData)
-
     result.data = await pdsPromisedData
     result.facetData = await pdsPromisedFacetData
   } catch (e) {
     console.warn('Unable to parse JSON', e)
-  }
-
-  if (!response.ok) {
-    const error: CustomError = new Error(response.statusText)
-    error.response = result
-    throw error
   }
 
   return result

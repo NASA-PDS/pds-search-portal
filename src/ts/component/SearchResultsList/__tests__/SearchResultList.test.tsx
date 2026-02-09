@@ -27,7 +27,9 @@ const setup = (overrideProps = {}) => {
             EntryTitle: 'Fake Collection 0',
             Abstract: 'Fake Abstract 0',
             ShortName: 'Fake Shortname 0',
-            Version: '1'
+            Version: '1',
+            Link: '',
+            PageType: ''
           }
         },
         {
@@ -39,7 +41,9 @@ const setup = (overrideProps = {}) => {
             EntryTitle: 'Fake Collection 1',
             Abstract: 'Fake Abstract 1',
             ShortName: 'Fake Shortname 1',
-            Version: '2'
+            Version: '2',
+            Link: '',
+            PageType: ''
           }
         }
       ]
