@@ -1,0 +1,149 @@
+name: Publish React dist to Drupal repo
+
+on:
+  # Run when a PR targeting pds-dev is closed in this repo
+  pull_request:
+    types: [closed]
+    branches:
+      - pds-dev
+
+permissions:
+  contents: read  # only need read in this repo; cross-repo writes use PAT
+
+jobs:
+  build-and-publish:
+    # Only proceed if the PR was actually merged
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    env:
+      # Paths and settings (tailored to your setup)
+      REACT_DIR: react
+      DRUPAL_DIR: drupal
+
+      # The built file we need from the React repo (relative to REACT_DIR)
+      DIST_FILE: "dist/dataCatalogMain.js"
+
+      # Target Drupal repo and branch to receive the PR
+      DRUPAL_REPO: "NASA-PDS/wst-docker-drupal"
+      DRUPAL_BASE_BRANCH: "pds-search-catalog-action-test"
+
+      # Target file (relative to Drupal repo root)
+      DRUPAL_MODULE_FILE: "web/modules/custom/project/pds_search/dist/dataCatalogMain.js"
+
+      # Branch naming for the automated PR in Drupal
+      BRANCH_PREFIX: "update/search-portal"
+
+    steps:
+      - name: Checkout React repo (this repo) at pds-dev
+        uses: actions/checkout@v4
+        with:
+          ref: pds-dev
+          path: ${{ env.REACT_DIR }}
+
+      # Use actions/setup-node to honor your `.nvmrc` (e.g., lts/jod) without needing nvm
+      - name: Setup Node from .nvmrc
+        uses: actions/setup-node@v4
+        with:
+          node-version-file: ${{ env.REACT_DIR }}/.nvmrc
+          cache: 'npm'
+          cache-dependency-path: ${{ env.REACT_DIR }}/package-lock.json
+
+      - name: Install deps and build React app
+        working-directory: ${{ env.REACT_DIR }}
+        run: |
+          npm ci
+          npm run build
+
+      - name: Verify dist file exists and is non-trivial
+        working-directory: ${{ env.REACT_DIR }}
+        run: |
+          if [ ! -f "${{ env.DIST_FILE }}" ]; then
+            echo "::error::Missing ${{ env.DIST_FILE }} after build"
+            exit 1
+          fi
+          SIZE=$(wc -c < "${{ env.DIST_FILE }}")
+          echo "Built file size: $SIZE bytes"
+          # Guard against accidental empty/failed bundles
+          if [ "$SIZE" -lt 1024 ]; then
+            echo "::error::Built file seems too small (<1KB). Aborting."
+            exit 1
+          fi
+
+      - name: Checkout Drupal repo
+        uses: actions/checkout@v4
+        with:
+          repository: ${{ env.DRUPAL_REPO }}
+          path: ${{ env.DRUPAL_DIR }}
+          token: ${{ secrets.DRUPAL_REPO_PAT }}
+
+      - name: Ensure target module directory exists
+        run: |
+          mkdir -p "$(dirname "${{ env.DRUPAL_DIR }}/${{ env.DRUPAL_MODULE_FILE }}")"
+
+      - name: Copy built JS into Drupal module
+        run: |
+          cp -v "${{ env.REACT_DIR }}/${{ env.DIST_FILE }}" "${{ env.DRUPAL_DIR }}/${{ env.DRUPAL_MODULE_FILE }}"
+
+      - name: Create branch, commit and push to Drupal repo
+        working-directory: ${{ env.DRUPAL_DIR }}
+        env:
+          PAT_TOKEN: ${{ secrets.DRUPAL_REPO_PAT }}
+        run: |
+          git config --global user.name "pds-search-portal-bot"
+          git config --global user.email "eng@nasa-pds.gov"
+          git fetch origin "${{ env.DRUPAL_BASE_BRANCH }}"
+          git checkout -B "${{ env.DRUPAL_BASE_BRANCH }}" "origin/${{ env.DRUPAL_BASE_BRANCH }}"
+
+          BRANCH="${{ env.BRANCH_PREFIX }}-${GITHUB_SHA::7}-$(date +'%Y%m%d-%H%M')"
+          git checkout -b "$BRANCH"
+
+          git add "${{ env.DRUPAL_MODULE_FILE }}"
+
+          if git diff --cached --quiet; then
+            echo "No changes detected in ${{ env.DRUPAL_MODULE_FILE }}. Skipping push and PR."
+            echo "BRANCH_NAME=" >> $GITHUB_ENV
+            exit 0
+          fi
+
+          git commit -m "Update dataCatalogMain.js from pds-search-portal@${GITHUB_SHA} (merged into pds-dev)"
+          git push --set-upstream origin "$BRANCH"
+          echo "BRANCH_NAME=$BRANCH" >> $GITHUB_ENV
+
+      - name: Install jq (for JSON handling)
+        if: env.BRANCH_NAME != ''
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y jq
+
+      - name: Create PR in Drupal repo via GitHub API
+        if: env.BRANCH_NAME != ''
+        env:
+          GH_TOKEN: ${{ secrets.DRUPAL_REPO_PAT }}
+        run: |
+          PR_TITLE="Update dataCatalogMain.js from pds-search-portal build"
+          PR_BODY="$(cat << 'EOF'
+          This automated PR updates the Drupal module JS bundle with the latest build from the pds-search-portal (branch pds-dev).
+
+          - Source repo: NASA-PDS/pds-search-portal
+          - Source commit: ${GITHUB_SHA}
+          - Dist file: ${{ env.DIST_FILE }}
+          - Target file: ${{ env.DRUPAL_MODULE_FILE }}
+          EOF
+          )"
+
+          API_URL="https://api.github.com/repos/${{ env.DRUPAL_REPO }}/pulls"
+          DATA="$(jq -n \
+            --arg title "$PR_TITLE" \
+            --arg head "$BRANCH_NAME" \
+            --arg base "${{ env.DRUPAL_BASE_BRANCH }}" \
+            --arg body "$PR_BODY" \
+            '{title: $title, head: $head, base: $base, body: $body}')"
+
+          echo "Creating PR against ${{ env.DRUPAL_REPO }}:${{ env.DRUPAL_BASE_BRANCH }} from branch $BRANCH_NAME"
+          curl -sS -X POST "$API_URL" \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H "Accept: application/vnd.github+json" \
+            -H "X-GitHub-Api-Version: 2022-11-28" \
+            -d "$DATA" \
+            | jq -r '.html_url // "PR creation failed"'
