@@ -2,11 +2,22 @@ import fetch from 'cross-fetch'
 
 import { pick } from 'lodash-es'
 
-import { getConfig } from './getConfig'
-import { stringifyCollectionsQuery } from './stringifyCollectionsQuery'
-import collectionDefaultParams from '../constants/collectionDefaultParams'
-import facetDefaultParams from '../constants/facetDefaultParams'
-import { Params, QueryResult } from '../../types/global'
+import {
+  Params,
+  PdsCmrParams,
+  QueryResult
+} from '../../types/global'
+import {
+  formatSearchResults,
+  convertPdsDataToAppData,
+  convertPdsFacetDataToAppFacetData,
+  formatIdentifierNameResults,
+  organizeIdsByRefName,
+  mapFilterIdsToName,
+  mapPageType,
+  formatFilterQueries
+} from './pds/searchUtils'
+import { IdentifierNameDoc } from '../../types/solrSearchResponse'
 
 const validParameters = [
   'bounding_box',
@@ -24,57 +35,21 @@ const validParameters = [
   'temporal'
 ] as const
 
-type CustomError = Error & { response?: QueryResult };
-
 /**
- * Merges default parameters with provided parameters, handling 'sort_key' specially.
- *
- * This function creates a new object based on the defaults and overrides them with
- * values from the params object. For the 'sort_key' parameter, if it exists in both
- * objects and the default value is an array, it replaces only the first element of
- * the array, preserving any additional default sort keys.
- *
- * @param {object} defaults - The default parameters object.
- * @param {object} params - The provided parameters object to merge with defaults.
- * @returns {object} A new object with merged parameters.
- *
- * @example
- * const defaults = {
- *   page_size: 20,
- *   sort_key: ['-score', '-create-data-date'],
- *   consortium: 'EOSDIS'
- * };
- *
- * const params = {
- *   page_size: 50,
- *   sort_key: 'start_date'
- * };
- *
- * const result = customMergeParams(defaults, params);
- * console.log(result);
- * // Output:
- * // {
- * //   page_size: 50,
- * //   sort_key: ['start_date', '-create-data-date'],
- * //   consortium: 'EOSDIS'
- * // }
+* Calculates Solr pagination parameters.
+ * @param {number} pageNumber - The current page (1-indexed).
+ * @param {number} pageSize - Number of results per page.
+ * @returns {object} An object containing the 'start' and 'rows' for Solr.
  */
-const customMergeParams = (defaults: any, params: any) => {
-  const result = { ...defaults }
+const getSolrPagination = (pageNumber: number, pageSize: number) => {
+  // Defensive check: ensure page is at least 1 and treat as integer
+  const page = Math.max(1, Math.floor(pageNumber))
+  const size = Math.floor(pageSize)
 
-  Object.keys(params).forEach((key) => {
-    if (key === 'sort_key' && Array.isArray(result[key])) {
-      // If sort_key exists in params, replace the first element of the default array
-      if (params[key]) {
-        result[key] = [params[key], ...result[key].slice(1)]
-      }
-    } else {
-      // For all other keys, simply override the default value
-      result[key] = params[key]
-    }
-  })
-
-  return result
+  return {
+    start: (page - 1) * size,
+    rows: size
+  }
 }
 
 /**
@@ -93,42 +68,148 @@ export const queryFacetedCollections = async (params: Params): Promise<QueryResu
 
   const cmrParams = pick(params, validParameters)
 
-  const cmrHost = getConfig('cmrHost')
-  const facetsQuery = stringifyCollectionsQuery({
-    ...facetDefaultParams,
-    ...cmrParams
-  }, false)
+  console.log('cmrParams', cmrParams)
 
-  const collectionsQuery = stringifyCollectionsQuery(
-    customMergeParams(collectionDefaultParams, cmrParams),
-    false
+  const formattedQuery = formatFilterQueries(params as PdsCmrParams)
+
+  // Keyword logic
+  let pdsUrl = 'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q='
+  if (cmrParams.keyword) {
+    pdsUrl += cmrParams.keyword.replace('*', '')
+  }
+
+  pdsUrl += formattedQuery
+
+  let pageSize = 10
+  if (cmrParams.page_size) {
+    pageSize = cmrParams.page_size
+  }
+
+  let pageNum = 1
+  if (cmrParams.page_num) {
+    pageNum = cmrParams.page_num
+  }
+
+  const pagination = getSolrPagination(pageNum, pageSize)
+  pdsUrl += `&start=${pagination.start}&rows=${pagination.rows}`
+
+  if (cmrParams.sort_key && cmrParams.sort_key === 'alpha') {
+    pdsUrl += '&sort=title asc'
+  }
+
+  console.log('pdsUrl', pdsUrl)
+
+  const pdsRes = await fetch(pdsUrl)
+  if (pdsRes.status >= 400) {
+    throw new Error('Bad response from server')
+  }
+
+  const pdsResponse = await pdsRes.json()
+  const formattedData = formatSearchResults(pdsResponse)
+
+  console.log('pdsResponse', pdsResponse)
+  console.log('formattedData', formattedData)
+
+  const pdsData = convertPdsDataToAppData(formattedData)
+
+  let facetCountsUrl = 'https://pds.nasa.gov/services/search/search?q=&qt=keyword&rows=0&facet=on&facet.field=investigation_ref&facet.field=instrument_ref&facet.field=target_ref&facet.field=page_type&wt=json&facet.limit=-1'
+  if (cmrParams.keyword) {
+    facetCountsUrl = facetCountsUrl.replace('q=', `q=${cmrParams.keyword.replace('*', '')}`)
+  }
+
+  // Facet logic
+  const pdsUrls = [
+    facetCountsUrl,
+    'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Investigation&fl=title,identifier&rows=10000',
+    'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Instrument&fl=title,identifier&rows=10000',
+    'https://pds.nasa.gov/services/search/search?wt=json&qt=keyword&q=data_class:Target&fl=title,identifier&rows=10000'
+  ]
+
+  const [
+    pdsIdsAndCounts,
+    pdsInvestigationNames,
+    pdsInstrumentNames,
+    pdsTargetNames] = await Promise.all([
+    fetch(pdsUrls[0]),
+    fetch(pdsUrls[1]),
+    fetch(pdsUrls[2]),
+    fetch(pdsUrls[3])
+  ])
+
+  const pdsIdsAndCountsResponse = await pdsIdsAndCounts.clone().json()
+  const pdsInvestigationNamesResponse = await pdsInvestigationNames.clone().json()
+  const pdsInstrumentNamesResponse = await pdsInstrumentNames.clone().json()
+  const pdsTargetNamesResponse = await pdsTargetNames.clone().json()
+
+  console.log('pdsIdsAndCountsResponse', pdsIdsAndCountsResponse)
+  console.log('pdsInvestigationNamesResponse', pdsInvestigationNamesResponse)
+  console.log('pdsInstrumentNamesResponse', pdsInstrumentNamesResponse)
+  console.log('pdsTargetNamesResponse', pdsTargetNamesResponse)
+
+  const formattedIdsAndCountsData = formatIdentifierNameResults(pdsIdsAndCountsResponse)
+  const formattedInvestigationData = formatIdentifierNameResults(pdsInvestigationNamesResponse)
+  const formattedInstrumentsData = formatIdentifierNameResults(pdsInstrumentNamesResponse)
+  const formattedTargetsData = formatIdentifierNameResults(pdsTargetNamesResponse)
+
+  const pageTypeFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'page_type'
   )
-  const facetsUrl = `${cmrHost}/search/collections.json?${facetsQuery}`
-  const collectionsUrl = `${cmrHost}/search/collections.umm_json?${collectionsQuery}`
+  const investigationFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'investigation_ref'
+  )
+  const instrumentFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'instrument_ref'
+  )
+  const targetFilterIds: string[] = organizeIdsByRefName(
+    formattedIdsAndCountsData,
+    'target_ref'
+  )
 
-  const [facets, collections] = await Promise.all([fetch(facetsUrl), fetch(collectionsUrl)])
+  const investigationNames: IdentifierNameDoc[] = formattedInvestigationData.response.docs
+  const instrumentNames: IdentifierNameDoc[] = formattedInstrumentsData.response.docs
+  const targetNames: IdentifierNameDoc[] = formattedTargetsData.response.docs
+
+  const investigationFilterOptions = mapFilterIdsToName(
+    investigationFilterIds,
+    investigationNames
+  )
+  const instrumentFilterOptions = mapFilterIdsToName(
+    instrumentFilterIds,
+    instrumentNames
+  )
+  const targetFilterOptions = mapFilterIdsToName(targetFilterIds, targetNames)
+  const pageTypeFilterOptions = mapPageType(pageTypeFilterIds)
 
   // Provide status / message / headers from the facets query unless collections failed
-  const response = !collections.ok ? collections : facets
 
   const result: QueryResult = {
-    status: response.status,
-    message: response.statusText,
-    headers: response.headers,
-    query: collectionsQuery
-  }
-  try {
-    // Clone required because fetch only allowed reading body once
-    result.data = await collections.clone().json()
-    result.facetData = await facets.clone().json()
-  } catch (e) {
-    console.warn('Unable to parse JSON', e)
+    status: 200,
+    message: '',
+    headers: {
+      'cmr-hits': pdsData['cmr-hits'] // This is expected a function. Either change the top to not treat as get function or make this have a get by parameter function
+    },
+    query: 'page_num=1&page_size=10&consortium=EOSDIS&sort_key[]=-score&sort_key[]=-create-data-date'
   }
 
-  if (!response.ok) {
-    const error: CustomError = new Error(response.statusText)
-    error.response = result
-    throw error
+  const pdsFacetData = convertPdsFacetDataToAppFacetData(
+    pageTypeFilterOptions,
+    investigationFilterOptions,
+    instrumentFilterOptions,
+    targetFilterOptions,
+    params as PdsCmrParams
+  )
+
+  const pdsPromisedFacetData = Promise.resolve<any>(pdsFacetData)
+  const pdsPromisedData = Promise.resolve<any>(pdsData)
+
+  try {
+    result.data = await pdsPromisedData
+    result.facetData = await pdsPromisedFacetData
+  } catch (e) {
+    console.warn('Unable to parse JSON', e)
   }
 
   return result

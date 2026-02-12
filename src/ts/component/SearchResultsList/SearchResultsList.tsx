@@ -40,6 +40,8 @@ interface CollectionItems {
     ShortName: string;
     Version: string;
     DOI?: DoiLink;
+    Link: string;
+    PageType: string;
     Projects?: Array<{ ShortName: string }>;
     ArchiveAndDistributionInformation?: {
       FileDistributionInformation: Array<{
