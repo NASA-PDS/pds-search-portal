@@ -29,7 +29,7 @@ jobs:
       DRUPAL_BASE_BRANCH: "pds-search-catalog-action-test"
 
       # Target file (relative to Drupal repo root)
-      DRUPAL_MODULE_FILE: "web/modules/custom/project/pds_search/dist/dataCatalogMain.js"
+      DRUPAL_MODULE_FILE: "web/modules/custom/project/pds_search_catalog/dist/dataCatalogMain.js"
 
       # Branch naming for the automated PR in Drupal
       BRANCH_PREFIX: "update/search-portal"
