@@ -1,7 +1,7 @@
 name: Publish React dist to Drupal repo
 
 on:
-  # Run when a PR targeting pds-dev is closed in this repo
+  # Run when a PR targeting pds-dev is closed (only proceed if it's merged)
   pull_request:
     types: [closed]
     branches:
@@ -12,19 +12,18 @@ permissions:
 
 jobs:
   build-and-publish:
-    # Only proceed if the PR was actually merged
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
     env:
-      # Paths and settings (tailored to your setup)
+      # Paths and settings
       REACT_DIR: react
       DRUPAL_DIR: drupal
 
       # The built file we need from the React repo (relative to REACT_DIR)
       DIST_FILE: "dist/dataCatalogMain.js"
 
-      # Target Drupal repo and branch to receive the PR
+      # Target Drupal repo and base branch for the PR
       DRUPAL_REPO: "NASA-PDS/wst-docker-drupal"
       DRUPAL_BASE_BRANCH: "pds-search-catalog-action-test"
 
@@ -41,7 +40,7 @@ jobs:
           ref: pds-dev
           path: ${{ env.REACT_DIR }}
 
-      # Use actions/setup-node to honor your `.nvmrc` (e.g., lts/jod) without needing nvm
+      # Honor .nvmrc (e.g., lts/jod) via actions/setup-node
       - name: Setup Node from .nvmrc
         uses: actions/setup-node@v4
         with:
@@ -64,18 +63,19 @@ jobs:
           fi
           SIZE=$(wc -c < "${{ env.DIST_FILE }}")
           echo "Built file size: $SIZE bytes"
-          # Guard against accidental empty/failed bundles
           if [ "$SIZE" -lt 1024 ]; then
             echo "::error::Built file seems too small (<1KB). Aborting."
             exit 1
           fi
 
-      - name: Checkout Drupal repo
+      - name: Checkout Drupal repo on target base branch
         uses: actions/checkout@v4
         with:
           repository: ${{ env.DRUPAL_REPO }}
           path: ${{ env.DRUPAL_DIR }}
           token: ${{ secrets.REACT_TO_DRUPAL_REPO_PAT }}
+          ref: ${{ env.DRUPAL_BASE_BRANCH }}  # ✅ ensure we are on pds-search-catalog-action-test
+          fetch-depth: 0                      # needed when creating branches
 
       - name: Ensure target module directory exists
         run: |
@@ -92,9 +92,8 @@ jobs:
         run: |
           git config --global user.name "pds-search-portal-bot"
           git config --global user.email "eng@nasa-pds.gov"
-          git fetch origin "${{ env.DRUPAL_BASE_BRANCH }}"
-          git checkout -B "${{ env.DRUPAL_BASE_BRANCH }}" "origin/${{ env.DRUPAL_BASE_BRANCH }}"
 
+          # Already on $DRUPAL_BASE_BRANCH thanks to checkout `ref`
           BRANCH="${{ env.BRANCH_PREFIX }}-${GITHUB_SHA::7}-$(date +'%Y%m%d-%H%M')"
           git checkout -b "$BRANCH"
 
