@@ -313,7 +313,7 @@ const DataCatalog: React.FC = () => {
               <>
                 <header className="hzn-main-header">
                   <Container className="pt-4">
-                    <h1>Data Catalog Github Action Test 4</h1>
+                    <h1>Data Catalog Github Action Test 5</h1>
                     <Form onSubmit={formHandleSubmit}>
                       <div className="hzn-search hzn-global-header">
                         <Form.Control
