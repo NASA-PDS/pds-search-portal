@@ -50,6 +50,7 @@ interface Umm {
   Version: String;
   Abstract: string;
   DOI?: DoiLink;
+  TimeExtent: string;
 }
 
 export interface Metadata {
@@ -84,6 +85,7 @@ export interface Metadata {
     SpatialExtent?:{
       HorizontalSpatialDomain:object
     }
+    TimeExtent: string
   };
 }
 
@@ -223,7 +225,8 @@ function ummToSummary({ meta, umm }: { meta: Meta, umm: Umm }) {
     pageType: umm.PageType,
     projects,
     published,
-    providerId: meta['provider-id']
+    providerId: meta['provider-id'],
+    timeExtent: umm.TimeExtent
   }
 }
 
@@ -235,7 +238,7 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
     doi,
     link,
     pageType,
-    published
+    timeExtent
   } = ummToSummary(metadata)
 
   const collection = metadata
@@ -252,11 +255,7 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
       <Row>
         <Col className="hzn-search-result__meta_metadata d-flex align-items-center">
           <span className="me-4">{pageType}</span>
-          <span className="me-2">
-            Published
-          </span>
-          {published}
-
+          {timeExtent}
         </Col>
       </Row>
       <Row>

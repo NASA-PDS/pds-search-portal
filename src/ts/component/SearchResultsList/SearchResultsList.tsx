@@ -61,6 +61,7 @@ interface CollectionItems {
     SpatialExtent?:{
       HorizontalSpatialDomain:object
     }
+    TimeExtent: string
   };
 }
 
