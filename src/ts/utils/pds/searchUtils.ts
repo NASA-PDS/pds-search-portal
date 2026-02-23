@@ -17,6 +17,7 @@ import {
 } from '../../../types/solrSearchResponseExpected'
 
 import { PdsCmrParams } from '../../../types/global'
+import { getConfig } from '../../utils/getConfig'
 
 const convertToStringArray = (
   param: string | string[]
@@ -424,19 +425,22 @@ const getDefaultLink = (doc: SearchResultDoc) => {
 }
 
 const getLinkToInvestigationDetailPage = (doc: SearchResultDoc) => {
-  const link = getDefaultLink(doc)
+  const drupalHost = getConfig('drupalHost')
+  const link = `${drupalHost}/investigations/${doc.identifier[0]}`
 
   return link
 }
 
 const getLinkToInstrumentDetailPage = (doc: SearchResultDoc) => {
-  const link = getDefaultLink(doc)
+  const drupalHost = getConfig('drupalHost')
+  const link = `${drupalHost}/instruments/${doc.identifier[0]}`
 
   return link
 }
 
 const getLinkToTargetDetailPage = (doc: SearchResultDoc) => {
-  const link = getDefaultLink(doc)
+  const drupalHost = getConfig('drupalHost')
+  const link = `${drupalHost}/targets/${doc.identifier[0]}`
 
   return link
 }

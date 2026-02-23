@@ -25,7 +25,7 @@ jobs:
 
       # Target Drupal repo and base branch for the PR
       DRUPAL_REPO: "NASA-PDS/wst-docker-drupal"
-      DRUPAL_BASE_BRANCH: "pds-search-catalog-action-test"
+      DRUPAL_BASE_BRANCH: "develop-pds"
 
       # Target file (relative to Drupal repo root)
       DRUPAL_MODULE_FILE: "web/modules/custom/project/pds_search_catalog/dist/dataCatalogMain.js"
