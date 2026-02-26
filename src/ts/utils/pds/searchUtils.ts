@@ -528,10 +528,10 @@ export function getTemporalCoverage(
   ) {
     formattedStop = '(ONGOING)'
   } else {
-    formattedStop = getUtcDateString(stopDateTime, temporalCoverageFormat) ?? '';
+    formattedStop = getUtcDateString(stopDateTime, temporalCoverageFormat) ?? ''
   }
 
-  return `Temporal Coverage: ${formattedStart ?? ''} to ${formattedStop}`;
+  return `Temporal Coverage: ${formattedStart ?? ''} to ${formattedStop}`
 }
 
 const generateSearchResultLinkPath = (pageType: string, doc: SearchResultDoc) => {
