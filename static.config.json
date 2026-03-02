@@ -3,6 +3,5 @@
   "defaultPageSize": 20,
   "edlHost": "https://sit.urs.earthdata.nasa.gov",
   "feedbackApp": "",
-  "version": "development",
-  "drupalHost": "https://localhost:8443"
+  "version": "development"
 }
