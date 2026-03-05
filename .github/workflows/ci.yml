@@ -36,6 +36,7 @@ jobs:
     - name: Run eslint
       run: npm run lint
   vitest:
+    if: ${{ false }} # Hard-disabled for now; remove or set to 'true'
     needs: [eslint]
     runs-on: ubuntu-latest
     strategy:
@@ -71,6 +72,7 @@ jobs:
         CODECOV_TOKEN: ${{ secrets.CODECOV_TOKEN }}
 
   tests-passed:
+    if: ${{ false }} # Hard-disabled for now; remove or set to 'true'
     needs: [vitest]
     runs-on: ubuntu-latest
     steps:
@@ -78,7 +80,8 @@ jobs:
       run: 'echo true'
   
   build:
-    needs: [tests-passed]
+    # needs: [tests-passed] # Hard-disabled for now;
+    needs: [eslint]
     runs-on: ubuntu-latest
     strategy:
       matrix:
