@@ -451,6 +451,85 @@ const getLinkToToolDetailPage = (doc: SearchResultDoc) => {
   return link
 }
 
+/** Minimal PHP-like formatter for UTC dates. Supports Y, m, d, H, i, s */
+function formatDateUTC(date: Date, format: string): string {
+  const pad = (n: number, len = 2) => String(n).padStart(len, '0')
+
+  const tokens: Record<string, string> = {
+    // Year
+    Y: String(date.getUTCFullYear()),
+    // Month (01-12)
+    m: pad(date.getUTCMonth() + 1),
+    // Day of month (01-31)
+    d: pad(date.getUTCDate()),
+    // Hour (00-23)
+    H: pad(date.getUTCHours()),
+    // Minutes (00-59)
+    i: pad(date.getUTCMinutes()),
+    // Seconds (00-59)
+    s: pad(date.getUTCSeconds())
+  }
+
+  // Replace token characters without interfering with other characters.
+  // This handles simple formats like 'm-d-Y', 'Y-m-d', 'm/d/Y', 'Y-m-d H:i:s'
+  return format.replace(/[YmdHis]/g, (t) => tokens[t] ?? t)
+}
+
+/**
+ * Returns the UTC date string in the specified format.
+ * - Accepts ISO-like date strings (e.g., '2024-12-31T23:59:59Z').
+ * - Returns null if the input is null/undefined or cannot be parsed.
+ *
+ * Supported PHP-like tokens: Y, m, d, H, i, s
+ * (You can extend this as needed.)
+ */
+export function getUtcDateString(
+  dateString: string | null | undefined,
+  format: string
+): string | null {
+  if (!dateString) return null
+
+  const date = new Date(dateString)
+  if (Number.isNaN(date.getTime())) return null
+
+  return formatDateUTC(date, format)
+}
+
+/**
+ * Returns the temporal coverage string for the given start and stop date times.
+ *
+ * Mirrors the PHP version:
+ * - If start is null/undefined => returns empty string.
+ * - Formats dates in UTC using the given PHP-like format (default 'm-d-Y').
+ * - If stop is null/empty/'3000-01-01T00:00:00.000Z' => uses '(ONGOING)'.
+ */
+export function getTemporalCoverage(
+  startDateTime: string | null | undefined,
+  stopDateTime: string | null | undefined,
+  temporalCoverageFormat: string = 'm-d-Y'
+): string {
+  if (startDateTime == null) {
+    return ''
+  }
+
+  console.log(`getTemporalCoverage ${startDateTime}`, stopDateTime)
+
+  const formattedStart = getUtcDateString(startDateTime, temporalCoverageFormat)
+
+  let formattedStop = ''
+  if (
+    stopDateTime == null
+    || stopDateTime === ''
+    || stopDateTime === '3000-01-01T00:00:00.000Z'
+  ) {
+    formattedStop = '(ONGOING)'
+  } else {
+    formattedStop = getUtcDateString(stopDateTime, temporalCoverageFormat) ?? ''
+  }
+
+  return `Temporal Coverage: ${formattedStart ?? ''} to ${formattedStop}`
+}
+
 const generateSearchResultLinkPath = (pageType: string, doc: SearchResultDoc) => {
   let link = ''
 
@@ -816,6 +895,7 @@ export const convertPdsDataToAppData = (pdsData: SolrSearchResponse) => {
             ]
           }
         ],
+        TimeExtent: doc.observation_start_date_time && doc.observation_stop_date_time ? getTemporalCoverage(doc.observation_start_date_time[0], doc.observation_stop_date_time[0], 'm-d-Y') : '',
         UseConstraints: {
           LicenseURL: {
             Description: 'License URL for data use policy',

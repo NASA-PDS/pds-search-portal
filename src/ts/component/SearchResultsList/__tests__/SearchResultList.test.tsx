@@ -29,7 +29,8 @@ const setup = (overrideProps = {}) => {
             ShortName: 'Fake Shortname 0',
             Version: '1',
             Link: '',
-            PageType: ''
+            PageType: '',
+            TimeExtent: ''
           }
         },
         {
@@ -43,7 +44,8 @@ const setup = (overrideProps = {}) => {
             ShortName: 'Fake Shortname 1',
             Version: '2',
             Link: '',
-            PageType: ''
+            PageType: '',
+            TimeExtent: ''
           }
         }
       ]
