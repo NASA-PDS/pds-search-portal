@@ -250,6 +250,14 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
     encodedUmm[key] = encodeURIComponent(String(value))
   })
 
+  const getFullUrl = (url: string): string => {
+    if (url.startsWith('http://') || url.startsWith('https://')) {
+      return url
+    }
+    const { protocol, host } = window.location
+    return `${protocol}//${host}${url}`
+  }
+
   return (
     <div key={conceptId} className="hzn-search-result pb-2">
       <Row>
@@ -272,7 +280,7 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
           <div className="hzn-search-result__shortname-version-doi d-flex mb-2 mt-1">
             {
               doi && (
-                <a className="hzn-search-result__doi-link" href={link}>{decodeURIComponent(link)}</a>
+                <a className="hzn-search-result__doi-link" href={link}>{decodeURIComponent(getFullUrl(link))}</a>
               )
             }
           </div>
