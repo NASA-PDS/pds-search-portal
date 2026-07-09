@@ -1,17 +1,15 @@
 name: Publish React dist to Drupal repo
 
+# Disabled: only runs if manually triggered
 on:
-  # Run when a PR targeting pds-dev is closed (only proceed if it's merged)
-  pull_request:
-    types: [closed]
-    branches:
-      - pds-dev
+  workflow_dispatch:
 
 permissions:
   contents: read  # only need read in this repo; cross-repo writes use PAT
 
 jobs:
   build-and-publish:
+    # Still present, but will never run automatically because only workflow_dispatch exists
     if: github.event.pull_request.merged == true
     runs-on: ubuntu-latest
 
@@ -74,7 +72,7 @@ jobs:
           repository: ${{ env.DRUPAL_REPO }}
           path: ${{ env.DRUPAL_DIR }}
           token: ${{ secrets.REACT_TO_DRUPAL_REPO_PAT }}
-          ref: ${{ env.DRUPAL_BASE_BRANCH }}  # ✅ ensure we are on pds-search-catalog-action-test
+          ref: ${{ env.DRUPAL_BASE_BRANCH }}  # ensure we are on pds-search-catalog-action-test even though we are already on $DRUPAL_BASE_BRANCH thanks to checkout `ref`
           fetch-depth: 0                      # needed when creating branches
 
       - name: Ensure target module directory exists

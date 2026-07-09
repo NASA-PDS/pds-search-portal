@@ -70,6 +70,7 @@ const SearchFilters: React.FC<SearchFiltersProps> = ({
               param={namesToParams.PageTypes}
               facets={getFacets('PageTypes')}
               onChange={onChange}
+              humanize={(name) => name.split(' ').map((word) => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')}
             />
           </SearchFilterSection>
         )
