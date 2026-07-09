@@ -254,7 +254,9 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
     if (url.startsWith('http://') || url.startsWith('https://')) {
       return url
     }
+
     const { protocol, host } = window.location
+
     return `${protocol}//${host}${url}`
   }
 
