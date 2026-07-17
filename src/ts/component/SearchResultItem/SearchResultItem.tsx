@@ -7,6 +7,7 @@ import {
   uniq
 } from 'lodash-es'
 import { getConfig } from '../../utils/getConfig'
+import { getDegrees } from '../../utils/getDegrees'
 import TextIcon from '../TextIcon/TextIcon'
 
 interface GeoPoint {
@@ -41,13 +42,21 @@ interface FileDistributionInfo {
   Format: string;
   // Add other properties if needed
 }
+
+interface Platform {
+  Type?: string;
+  ShortName?: string;
+  LongName?: string;
+}
+
 interface Umm {
   DataCenters?: Array<{ Roles: string[], ShortName: string }>;
   ArchiveAndDistributionInformation?: {
     FileDistributionInformation?: FileDistributionInfo[];
   };
+  Platforms?: Platform[];
   Projects?: Array<{ ShortName: string }>;
-  RelatedUrls?: Array<{ Type: string, URL: string }>;
+  RelatedUrls?: Array<{ Type: string, URL: string, URLContentType?: string, Description?: string }>;
   DataDates?: Array<{ Type: string, Date: string }>;
   EntryTitle: string;
   ShortName: string;
@@ -67,6 +76,7 @@ export interface Metadata {
     ShortName: string;
     Version: string;
     DOI?: DoiLink;
+    Platforms?: Platform[];
     Projects?: Array<{ ShortName: string }>;
     ArchiveAndDistributionInformation?: {
       FileDistributionInformation: Array<{
@@ -82,6 +92,11 @@ export interface Metadata {
       }>;
     };
     DataCenters?: Array<{ Roles: string[]; ShortName: string }>;
+    RelatedUrls?: Array<{
+      Type: string, URL: string
+      URLContentType?: string
+      description: string
+    }>;
     TemporalExtents?: object
     SpatialExtent?:{
       HorizontalSpatialDomain:object
@@ -91,6 +106,76 @@ export interface Metadata {
 
 interface SearchResultItemProps {
   metadata: Metadata;
+}
+
+const EARTHDATA_CENTERS_BASE_URL = 'https://www.earthdata.nasa.gov/centers'
+
+const daacSlugMap: Record<string, string> = {
+  AFDRC: 'afdrc',
+  ASDC: 'asdc-daac',
+  ASF: 'asf-daac',
+  ATMOSPHERE: 'atmosphere-sips',
+  CDDIS: 'cddis-daac',
+  GESDISC: 'gesdisc-daac',
+  GHRC: 'ghrc-daac',
+  LAADSDAAC: 'laads-daac',
+  LANDSIPS: 'land-sips',
+  LP: 'lp-daac',
+  MLSSIPS: 'mls-sips',
+  MODAPS: 'modaps-sips',
+  NSIDC: 'nsidc-daac',
+  OBDAAC: 'ob-daac',
+  OBPG: 'obpg',
+  OCEAN: 'ocean-sips',
+  OMISIPS: 'omi-sips',
+  OMPSSIPS: 'omps-sips',
+  ORNL: 'ornl-daac',
+  PODAAC: 'po-daac',
+  SOUNDERSIPS: 'sounder-sips'
+}
+
+const daacSlugEntries = Object.entries(daacSlugMap)
+  .sort(([left], [right]) => right.length - left.length)
+
+function normalizeDaacKey(value: string): string {
+  return value.toUpperCase().replace(/[^A-Z0-9]/g, '')
+}
+
+function findDaacSlug(normalizedKey: string): string | null {
+  if (daacSlugMap[normalizedKey]) return daacSlugMap[normalizedKey]
+
+  const partialMatch = daacSlugEntries.find(([key]) => normalizedKey.includes(key))
+
+  return partialMatch ? partialMatch[1] : null
+}
+
+function getArchiverShortName(umm: Umm): string | null {
+  const archiver = (umm.DataCenters || []).find(({ Roles }) => Roles.indexOf('ARCHIVER') !== -1)
+
+  return archiver?.ShortName || null
+}
+
+function getDaacDisplayName(shortName: string | null): string | null {
+  if (!shortName) return null
+
+  return shortName.split('/').pop()?.trim() || shortName.trim()
+}
+
+/*
+// Normalize each Archiver short name by uppercasing and stripping punctuation and then
+// resolve it against the known map of Centers slugs using exact match and then longest-key
+// partial match second. this handles inconsistent formats like NASA/GSFC and PO.DAAC
+*/
+function getDataProviderLink(shortName: string | null): string | null {
+  if (!shortName) return null
+
+  const displayName = getDaacDisplayName(shortName)
+  const candidates = [shortName, displayName].filter((v): v is string => Boolean(v))
+  const match = candidates
+    .map((candidate) => findDaacSlug(normalizeDaacKey(candidate)))
+    .find((slug): slug is string => Boolean(slug))
+
+  return match ? `${EARTHDATA_CENTERS_BASE_URL}/${match}` : null
 }
 
 function ummTemporalToHuman(umm: object): string | null {
@@ -123,7 +208,7 @@ function ummSpatialToSummary(umm: object): string | null {
   } = geometry
 
   if (Points && Points[0]) {
-    let result = `(${Points[0].Latitude}, ${Points[0].Longitude})`
+    let result = `(${getDegrees(Points[0].Latitude)}, ${getDegrees(Points[0].Longitude)})`
     if (Points.length > 1) result += '...'
 
     return result
@@ -132,7 +217,7 @@ function ummSpatialToSummary(umm: object): string | null {
   const bboxToSummary = (west: number, east: number, south: number, north: number): string => {
     if (west === -180 && east === 180 && south === -90 && north === 90) return 'Global'
 
-    return `Latitudes ${south} to ${north}, Longitudes ${west} to ${east}`
+    return `Latitudes ${getDegrees(south)} to ${getDegrees(north)}, Longitudes ${getDegrees(west)} to ${getDegrees(east)}`
   }
 
   if (BoundingRectangles && BoundingRectangles[0]) {
@@ -196,11 +281,18 @@ function doiLink(doi: DOI) {
  * @returns an object summarizing the UMM-C JSON appropriate for display
  */
 function ummToSummary({ meta, umm }: { meta: Meta, umm: Umm }) {
-  const daac = (umm.DataCenters || []).find(({ Roles }) => Roles.indexOf('ARCHIVER') !== -1)
+  const archiverShortName = getArchiverShortName(umm)
 
   const fileFormats = get(umm, ['ArchiveAndDistributionInformation', 'FileDistributionInformation'], [])
     .filter((f: FileDistributionInfo) => f.FormatType === 'Native').map((f: FileDistributionInfo) => f.Format).join(', ') || null
 
+  const relatedUrlPlatform = (umm.RelatedUrls || []).find(({ URLContentType, URL }) => URLContentType === 'PublicationURL' && URL.includes('/data/platforms'))
+  const platforms = relatedUrlPlatform
+    ? [{
+      href: relatedUrlPlatform.URL,
+      text: relatedUrlPlatform.Description || 'platform'
+    }]
+    : []
   const projects = (umm.Projects || []).map((p) => p.ShortName).join(', ') || null
 
   const configuredLandingPage = (umm.RelatedUrls || []).find(({ Type }) => Type === 'DATA SET LANDING PAGE')
@@ -219,8 +311,10 @@ function ummToSummary({ meta, umm }: { meta: Meta, umm: Umm }) {
     spatial: ummSpatialToSummary(umm),
     configuredLandingPage: configuredLandingPage && configuredLandingPage.URL,
     doi: umm.DOI ? doiLink(umm.DOI) : undefined,
-    daac: daac && daac.ShortName.split('/').pop(),
+    daac: getDaacDisplayName(archiverShortName),
+    dataProviderLink: getDataProviderLink(archiverShortName),
     fileFormats,
+    platforms,
     projects,
     published,
     providerId: meta['provider-id']
@@ -237,9 +331,11 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
     temporal,
     spatial,
     daac,
+    dataProviderLink,
     configuredLandingPage,
     doi,
     fileFormats,
+    platforms,
     projects,
     published,
     providerId
@@ -267,6 +363,9 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
   })
 
   const shortnameVersion = shortname && version ? `${shortname} v${version}` : null
+  const platformLinks = platforms
+    .filter((platform): platform is {href: string, text: string } => Boolean(platform))
+  const platformLink = platformLinks[0] || null
 
   const titleLink = (): string => {
     // Render a clickable title link if:
@@ -344,7 +443,7 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
             {shortnameVersion && (shortnameVersion)}
             {
               doi && (
-                <a className="hzn-search-result__doi-link" href={doi.link}>{doi.text}</a>
+                <a className="hzn-link hzn-link--external hzn-search-result__doi-link" href={doi.link}>{doi.text}</a>
               )
             }
           </div>
@@ -353,7 +452,24 @@ export const SearchResultItem: React.FC<SearchResultItemProps> = ({ metadata }) 
           <Row>
             <TextIcon className="col-md-auto col-lg-12 mb-2" iconName="doc" title="File Format" field={fileFormats} />
             <TextIcon className="col-md-auto col-lg-12 mb-2" iconName="globe" title="Mission / Project" field={projects} />
-            <TextIcon className="col-md-auto col-lg-12 mb-2" iconName="location" title="Archive Center" field={daac} />
+            <TextIcon
+              className="col-md-auto col-lg-12 mb-2"
+              iconName="location"
+              title="Archive Center"
+              field={daac}
+              href={dataProviderLink || undefined}
+            />
+            {
+              platformLink && (
+                <TextIcon
+                  className="col-md-auto col-lg-12 mb-2"
+                  iconName="orbiter"
+                  title="Platform"
+                  field={platformLink.text}
+                  href={platformLink.href}
+                />
+              )
+            }
           </Row>
         </Col>
       </Row>
