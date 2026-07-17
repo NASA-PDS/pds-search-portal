@@ -75,6 +75,12 @@ const mockUmm = (): any => cloneDeep({
       {
         Type: 'DATA SET LANDING PAGE',
         URL: 'https://example.com/landing/page'
+      },
+      {
+        Type: 'VIEW RELATED INFORMATION',
+        URLContentType: 'PublicationURL',
+        URL: 'https://www.test.gov/data/platforms/space-based-platforms/SOME_SAT',
+        Description: 'SOME-SAT Homepage'
       }
     ],
     SpatialExtent: {
@@ -100,6 +106,30 @@ const mockUmm = (): any => cloneDeep({
         SingleDateTimes: ['2021-01-03T00:00:00.000Z']
       }
     ],
+    Platforms: [
+      {
+        ShortName: 'MODELS',
+        Type: 'Models',
+        LongName: 'MODELS',
+        Instruments: [
+          {
+            ShortName: 'Computer',
+            LongName: 'Computer'
+          }
+        ]
+      },
+      {
+        ShortName: 'SOME-SAT',
+        Type: 'Earth Observation Satellites',
+        LongName: 'Orbiting Satellite',
+        Instruments: [
+          {
+            ShortName: 'SPECTROMETERS',
+            LongName: 'Test Spectrometers'
+          }
+        ]
+      }
+    ],
     Projects: [
       { ShortName: 'Project 1' },
       { ShortName: 'Project 2' }
@@ -122,7 +152,7 @@ describe('DataCatalog SearchResultItem component', () => {
     expect(screen.getByText('Fake Collection')).toBeInTheDocument()
     expect(screen.getByText('Fake Abstract')).toBeInTheDocument()
     expect(screen.getByText('2020-01-01')).toBeInTheDocument()
-    expect(screen.getByText('Latitudes -3 to 4, Longitudes -1 to 2')).toBeInTheDocument()
+    expect(screen.getByText('Latitudes -3.0° to 4.0°, Longitudes -1.0° to 2.0°')).toBeInTheDocument()
     expect(screen.getByText('2021-01-01 to 2021-01-02')).toBeInTheDocument()
     expect(screen.getByTitle('File Format')).toBeInTheDocument()
     expect(screen.getByText('NetCDF4, GeoJSON')).toBeInTheDocument()
@@ -130,6 +160,8 @@ describe('DataCatalog SearchResultItem component', () => {
     expect(screen.getByText('Project 1, Project 2')).toBeInTheDocument()
     expect(screen.getByTitle('Archive Center')).toBeInTheDocument()
     expect(screen.getByText('FOO.DAAC')).toBeInTheDocument()
+    expect(screen.getByText('FOO.DAAC')).not.toHaveAttribute('href')
+    expect(screen.getByRole('link', { name: 'SOME-SAT Homepage' })).toHaveAttribute('href', 'https://www.test.gov/data/platforms/space-based-platforms/SOME_SAT')
     expect(screen.getByText('ab:cd.ef')).toHaveAttribute('href', 'https://doi.org/ab:cd.ef')
     expect(screen.getByText('Spatial Coverage:')).toBeInTheDocument()
     expect(screen.getByText('Temporal Coverage:')).toBeInTheDocument()
@@ -217,7 +249,7 @@ describe('DataCatalog SearchResultItem component', () => {
     }
 
     renderMetadata(metadata)
-    expect(screen.getByText('(1, 2)')).toBeInTheDocument()
+    expect(screen.getByText('(1.0°, 2.0°)')).toBeInTheDocument()
   })
 
   test('indicates multiple point spatial', () => {
@@ -236,7 +268,7 @@ describe('DataCatalog SearchResultItem component', () => {
     }
 
     renderMetadata(metadata)
-    expect(screen.getByText('(1, 2)...')).toBeInTheDocument()
+    expect(screen.getByText('(1.0°, 2.0°)...')).toBeInTheDocument()
   })
 
   test('renders bounding boxes defined as polygons as though they were bounding boxes', () => {
@@ -274,7 +306,7 @@ describe('DataCatalog SearchResultItem component', () => {
     }
 
     renderMetadata(metadata)
-    expect(screen.getByText('Latitudes -1 to 3, Longitudes -2 to 4')).toBeInTheDocument()
+    expect(screen.getByText('Latitudes -1.0° to 3.0°, Longitudes -2.0° to 4.0°')).toBeInTheDocument()
   })
 
   test('does not render non-cartesian rectangular', () => {
@@ -446,7 +478,7 @@ describe('DataCatalog SearchResultItem component', () => {
 
     const metadata = mockUmm()
     delete metadata.umm.DOI
-    metadata.umm.RelatedUrls.pop()
+    metadata.umm.RelatedUrls = []
     renderMetadata(metadata)
     expect(screen.getByText('Fake Collection')).toHaveAttribute('href', 'https://cmr.example.com/concepts/C100-FAKE')
     expect(getConfig).toHaveBeenCalledWith('cmrHost')
@@ -557,5 +589,87 @@ describe('DataCatalog SearchResultItem component', () => {
 
     // Without RelatedUrls and DOI, it should fall back to the collection detail page
     expect(screen.getByText('Fake Collection')).not.toHaveAttribute('href', '/collections/c100-fake')
+  })
+
+  test('maps NASA path short name to Earthdata center URL', () => {
+    const metadata = mockUmm()
+    metadata.umm.DataCenters[1].ShortName = 'NASA/GSFC/SED/ESD/TISL/GESDISC'
+
+    renderMetadata(metadata)
+
+    expect(screen.getByText('GESDISC')).toHaveAttribute('href', 'https://www.earthdata.nasa.gov/centers/gesdisc-daac')
+  })
+
+  test('maps NASA NSIDC DAAC short name to Earthdata center URL', () => {
+    const metadata = mockUmm()
+    metadata.umm.DataCenters[1].ShortName = 'NASA NSIDC DAAC'
+
+    renderMetadata(metadata)
+
+    expect(screen.getByText('NASA NSIDC DAAC')).toHaveAttribute('href', 'https://www.earthdata.nasa.gov/centers/nsidc-daac')
+  })
+
+  test('maps PO.DAAC short name to Earthdata center URL', () => {
+    const metadata = mockUmm()
+    metadata.umm.DataCenters[1].ShortName = 'PO.DAAC'
+
+    renderMetadata(metadata)
+
+    expect(screen.getByText('PO.DAAC')).toHaveAttribute('href', 'https://www.earthdata.nasa.gov/centers/po-daac')
+  })
+
+  test('renders platform icon and link when at least one platform type is known', () => {
+    const metadata = mockUmm()
+    metadata.umm.RelatedUrls = [
+      {
+        Type: 'VIEW RELATED INFORMATION',
+        URLContentType: 'PublicationURL',
+        URL: 'https://www.test.gov/data/platforms/space-based-platforms/Terra',
+        Description: 'Terra Homepage'
+      }
+    ]
+
+    renderMetadata(metadata)
+
+    expect(screen.getByTitle('Platform')).toBeVisible()
+    expect(screen.getByRole('link', { name: /Terra Homepage/i })).toHaveAttribute('href', 'https://www.test.gov/data/platforms/space-based-platforms/Terra')
+  })
+
+  test('does not render platform icon or link when no RelatedUrls contain a platform PublicationURL', () => {
+    const metadata = mockUmm()
+    metadata.umm.RelatedUrls = [
+      {
+        Type: 'DATASET LANDING PAGE',
+        URL: 'https://example.com/landing/page'
+      }
+    ]
+
+    renderMetadata(metadata)
+
+    expect(screen.queryByTitle('Platform')).not.toBeInTheDocument()
+  })
+
+  test('only uses PublicationURL entries that contain a platform path', () => {
+    const metadata = mockUmm()
+    metadata.umm.RelatedUrls = [
+      {
+        Type: 'View Related Information',
+        URLContentType: 'PublicationURL',
+        URL: 'https://test.gov/data/instruments/OCTS',
+        Description: 'OCTS Homepage'
+      },
+      {
+        Type: 'View Related Information',
+        URLContentType: 'PublicationURL',
+        URL: 'https://test.gov/data/platforms/space-based-platforms/SOME-SAT',
+        Description: 'SOME-SAT Homepage'
+      }
+    ]
+
+    renderMetadata(metadata)
+
+    expect(screen.getByTitle('Platform')).toBeVisible()
+    expect(screen.getByRole('link', { name: /SOME-SAT Homepage/i })).toHaveAttribute('href', 'https://test.gov/data/platforms/space-based-platforms/SOME-SAT')
+    expect(screen.queryByRole('link', { name: /OCTS Homepage/i })).not.toBeInTheDocument()
   })
 })
