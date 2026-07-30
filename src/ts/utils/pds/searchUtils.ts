@@ -441,6 +441,18 @@ const getLinkToTargetDetailPage = (doc: SearchResultDoc) => {
   return link
 }
 
+const getLinkToTelescopeDetailPage = (doc: SearchResultDoc) => {
+  const link = `/telescopes/${doc.identifier[0]}`
+
+  return link
+}
+
+const getLinkToFacilityDetailPage = (doc: SearchResultDoc) => {
+  const link = `/facilities/${doc.identifier[0]}`
+
+  return link
+}
+
 const getLinkToToolDetailPage = (doc: SearchResultDoc) => {
   let link = getDefaultLink(doc)
 
@@ -559,13 +571,13 @@ const generateSearchResultLinkPath = (pageType: string, doc: SearchResultDoc) =>
       link = getLinkToInstrumentDetailPage(doc)
       break
     case 'telescope portal':
-      link = getDefaultLink(doc)
+      link = getLinkToTelescopeDetailPage(doc)
       break
     case 'target portal':
       link = getLinkToTargetDetailPage(doc)
       break
     case 'facility portal':
-      link = getDefaultLink(doc)
+      link = getLinkToFacilityDetailPage(doc)
       break
     default:
       link = ''
