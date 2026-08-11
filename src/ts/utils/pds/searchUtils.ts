@@ -423,6 +423,18 @@ const getDefaultLink = (doc: SearchResultDoc) => {
   return link
 }
 
+const getLinkToBundleDetailPage = (doc: SearchResultDoc) => {
+  const link = `/bundles/${doc.identifier[0]}`
+
+  return link
+}
+
+const getLinkToCollectionDetailPage = (doc: SearchResultDoc) => {
+  const link = `/collections/${doc.identifier[0]}`
+
+  return link
+}
+
 const getLinkToInvestigationDetailPage = (doc: SearchResultDoc) => {
   const link = `/investigations/${doc.identifier[0]}`
 
@@ -550,10 +562,10 @@ const generateSearchResultLinkPath = (pageType: string, doc: SearchResultDoc) =>
       link = getDefaultLink(doc)
       break
     case 'data bundle':
-      link = getDefaultLink(doc)
+      link = getLinkToBundleDetailPage(doc)
       break
     case 'data collection':
-      link = getDefaultLink(doc)
+      link = getLinkToCollectionDetailPage(doc)
       break
     case 'tool':
       link = getLinkToToolDetailPage(doc)
